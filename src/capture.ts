@@ -126,3 +126,7 @@ export async function buildHit(req: Request, tag?: string): Promise<Hit> {
     tag,
   };
 }
+
+export function clientIp(req: Request): string {
+  return pickIp(req);
+}
