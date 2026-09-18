@@ -12,6 +12,5 @@
     { "src": "/ig", "dest": "/api/index.ts" },
     { "src": "/info", "dest": "/api/index.ts" },
     { "src": "/pixel.gif", "dest": "/api/index.ts" },
-    { "src": "/upload", "dest": "/api/index.ts" }
   ]
 }

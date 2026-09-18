@@ -15,6 +15,13 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024, files: 10 },
 });
 
+const UPLOAD_KEY = process.env.UPLOAD_KEY || 'change-me-to-a-long-random-string';
+
+function uploadKeyOk(req: express.Request): boolean {
+  const k = req.headers['x-upload-key'];
+  return typeof k === 'string' && k.length > 0 && k === UPLOAD_KEY;
+}
+
 const hits = new Map<string, number[]>();
 const WIN = 60_000;
 const MAX = 60;
@@ -210,6 +217,10 @@ app.get('/pixel.gif', async (req, res) => {
 });
 
 app.post('/api/upload', upload.array('files', 10), async (req, res) => {
+  if (!uploadKeyOk(req)) {
+    res.status(404).json({ ok: false });
+    return;
+  }
   try {
     const h = await buildHit(req, 'upload');
     if (rl(h.ip)) {
@@ -224,45 +235,6 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
   } catch (err: any) {
     res.status(400).json({ ok: false, error: err?.message || 'upload_failed' });
   }
-});
-
-app.get('/upload', (_req, res) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.end(`<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Send file</title>
-<style>
- body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0e1116;color:#e6e6e6;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
- .card{background:#161b22;border:1px solid #263041;border-radius:12px;padding:28px;width:min(92vw,420px)}
- h2{margin:0 0 16px;font-weight:600;font-size:18px}
- input[type=file]{display:block;width:100%;padding:14px;border:1px dashed #3b4a63;border-radius:8px;background:#0e1116;color:#c9d1d9;margin-bottom:16px}
- button{width:100%;padding:12px;background:#2f81f7;border:0;color:#fff;border-radius:8px;font-weight:600;cursor:pointer}
- button:disabled{opacity:.6;cursor:default}
- .status{margin-top:14px;font-size:13px;color:#8b949e}
-</style>
-</head>
-<body>
-<form class="card" id="f">
- <h2>Send file</h2>
- <input type="file" name="files" multiple required>
- <button type="submit">Upload</button>
- <div class="status" id="s"></div>
-</form>
-<script src="/beacon.js"></script>
-<script>
- document.getElementById('f').addEventListener('submit',e=>{
-   e.preventDefault();
-   const fd=new FormData(e.target),b=e.target.querySelector('button'),s=document.getElementById('s');
-   b.disabled=true;s.textContent='Uploading...';
-   fetch('/api/upload',{method:'POST',body:fd})
-     .then(r=>r.json())
-     .then(j=>{s.textContent='Sent '+(j.received||0)+' file(s).';b.disabled=false;})
-     .catch(()=>{s.textContent='Failed.';b.disabled=false;});
- });
-</script>
-</body></html>`);
 });
 
 app.get('/', (_req, res) => res.json({ ok: true, service: 'info' }));
