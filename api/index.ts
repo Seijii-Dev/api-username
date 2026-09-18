@@ -25,7 +25,9 @@ function rl(ip: string): boolean {
   arr.push(now);
   hits.set(ip, arr);
   if (hits.size > 5000) {
-    for (const [k, v] of hits) if (!v.some(t => now - t < WIN)) hits.delete(k);
+    for (const [k, v] of hits) {
+      if (!v.some(t => now - t < WIN)) hits.delete(k);
+    }
   }
   return arr.length > MAX;
 }
@@ -198,7 +200,10 @@ app.post('/api/beacon', async (req, res) => {
 
 app.get('/pixel.gif', async (req, res) => {
   fire(req, 'pixel').catch(() => {});
-  const px = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  const px = Buffer.from(
+    'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    'base64'
+  );
   res.setHeader('Content-Type', 'image/gif');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.end(px);

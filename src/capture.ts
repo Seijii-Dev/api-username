@@ -2,8 +2,21 @@ import { UAParser } from 'ua-parser-js';
 import type { Request } from 'express';
 import type { Hit } from './telegram';
 
-const IP_HEADERS = ['cf-connecting-ip', 'true-client-ip', 'x-real-ip', 'x-vercel-forwarded-for', 'x-client-ip', 'x-cluster-client-ip'];
-const PRIVATE = ['10.', '192.168.', '127.', '169.254.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.'];
+const IP_HEADERS = [
+  'cf-connecting-ip',
+  'true-client-ip',
+  'x-real-ip',
+  'x-vercel-forwarded-for',
+  'x-client-ip',
+  'x-cluster-client-ip',
+];
+
+const PRIVATE = [
+  '10.', '192.168.', '127.', '169.254.',
+  '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.',
+  '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.',
+  '172.30.', '172.31.',
+];
 
 function pickIp(req: Request): string {
   const xff = req.headers['x-forwarded-for'];
@@ -23,9 +36,11 @@ function chain(req: Request): string[] {
   const out: string[] = [];
   const xff = req.headers['x-forwarded-for'];
   const raw = Array.isArray(xff) ? xff.join(',') : xff;
-  if (typeof raw === 'string') for (const p of raw.split(',')) {
-    const t = p.trim();
-    if (t) out.push(t);
+  if (typeof raw === 'string') {
+    for (const p of raw.split(',')) {
+      const t = p.trim();
+      if (t) out.push(t);
+    }
   }
   const r = req.socket?.remoteAddress;
   if (r && !out.includes(r)) out.push(r.replace(/^::ffff:/, ''));
@@ -43,13 +58,30 @@ async function geo(ip: string): Promise<Hit['geo']> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as`, { signal: ctrl.signal });
+    const r = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as`,
+      { signal: ctrl.signal }
+    );
     clearTimeout(t);
     if (!r.ok) return undefined;
     const d: any = await r.json();
     if (d.status !== 'success') return undefined;
-    return { country: d.country, countryCode: d.countryCode, region: d.regionName, city: d.city, zip: d.zip, lat: d.lat, lon: d.lon, timezone: d.timezone, isp: d.isp, org: d.org, as: d.as };
-  } catch { return undefined; }
+    return {
+      country: d.country,
+      countryCode: d.countryCode,
+      region: d.regionName,
+      city: d.city,
+      zip: d.zip,
+      lat: d.lat,
+      lon: d.lon,
+      timezone: d.timezone,
+      isp: d.isp,
+      org: d.org,
+      as: d.as,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function buildHit(req: Request, tag?: string): Promise<Hit> {
@@ -67,7 +99,9 @@ export async function buildHit(req: Request, tag?: string): Promise<Hit> {
     ipChain: chain(req),
     method: req.method,
     path: req.path,
-    query: Object.entries(req.query).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(',') : String(v ?? '')}`).join('&'),
+    query: Object.entries(req.query)
+      .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(',') : String(v ?? '')}`)
+      .join('&'),
     host: String(req.headers.host || ''),
     timestamp: new Date().toISOString(),
     userAgent: ua,

@@ -2,7 +2,9 @@ const PRIMARY = 'https://europe-west3-storyviewer-7a64d.cloudfunctions.net/getIn
 const FALLBACK = 'https://instagram.abbasofficaldevs.workers.dev/info';
 const TIMEOUT = 15000;
 
-function asDict(v: any): Record<string, any> { return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+function asDict(v: any): Record<string, any> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
 
 async function withTimeout(url: string, init: RequestInit, ms: number): Promise<Response | null> {
   try {
@@ -11,21 +13,32 @@ async function withTimeout(url: string, init: RequestInit, ms: number): Promise<
     const r = await fetch(url, { ...init, signal: ctrl.signal });
     clearTimeout(t);
     return r;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function primary(username: string): Promise<any | null> {
-  const body = JSON.stringify({ data: { endpoint: '/v1/info', params: { include_about: true, username_or_id_or_url: username } } });
+  const body = JSON.stringify({
+    data: {
+      endpoint: '/v1/info',
+      params: { include_about: true, username_or_id_or_url: username },
+    },
+  });
   for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await withTimeout(PRIMARY, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
+    const r = await withTimeout(
+      PRIMARY,
+      {
+        method: 'POST',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body,
       },
-      body,
-    }, TIMEOUT);
+      TIMEOUT
+    );
     if (!r) return null;
     if (r.status === 200) {
       const data: any = await r.json().catch(() => null);
@@ -35,11 +48,20 @@ async function primary(username: string): Promise<any | null> {
       const apiUser = root.username || about.username;
       const requested = username.trim().replace(/^@/, '');
       const profileId = root.id || about.id;
-      const hasData = !!(profileId || root.full_name || 'follower_count' in root || 'media_count' in root);
-      const matches = !apiUser || String(apiUser).trim().replace(/^@/, '').toLowerCase() === requested.toLowerCase();
+      const hasData = !!(
+        profileId ||
+        root.full_name ||
+        'follower_count' in root ||
+        'media_count' in root
+      );
+      const matches =
+        !apiUser ||
+        String(apiUser).trim().replace(/^@/, '').toLowerCase() === requested.toLowerCase();
       if (matches && hasData) {
         const at = Number(root.account_type ?? 1);
-        const label = ({ 1: 'Personal', 2: 'Creator', 3: 'Business' } as Record<number, string>)[at] || 'Personal';
+        const label =
+          ({ 1: 'Personal', 2: 'Creator', 3: 'Business' } as Record<number, string>)[at] ||
+          'Personal';
         return {
           found: true,
           data: {
@@ -65,40 +87,53 @@ async function primary(username: string): Promise<any | null> {
       }
       return { found: false };
     }
-    if (r.status === 429) { await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); continue; }
+    if (r.status === 429) {
+      await new Promise(res => setTimeout(res, 2000 * (attempt + 1)));
+      continue;
+    }
     if (r.status === 403 || r.status === 404) return { found: false };
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(res => setTimeout(res, 1000));
   }
   return { found: false };
 }
 
 async function fallback(username: string): Promise<any | null> {
-  const r = await withTimeout(`${FALLBACK}?username=${encodeURIComponent(username)}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
-  }, TIMEOUT);
+  const r = await withTimeout(
+    `${FALLBACK}?username=${encodeURIComponent(username)}`,
+    {
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+    },
+    TIMEOUT
+  );
   if (!r) return null;
   if (r.status === 404) return { found: false };
   if (r.status !== 200) return null;
   const payload: any = await r.json().catch(() => null);
   if (!payload || typeof payload !== 'object') return null;
+
   let data: any;
   if (payload.success === true && payload.data && typeof payload.data === 'object') data = payload.data;
   else if (payload.error) return { found: false };
   else if (payload.username) data = payload;
   else return null;
+
   const apiUser = data.username;
-  if (!apiUser || String(apiUser).trim().toLowerCase() !== username.trim().toLowerCase()) return { found: false };
+  if (!apiUser || String(apiUser).trim().toLowerCase() !== username.trim().toLowerCase()) {
+    return { found: false };
+  }
   const account = asDict(data.account);
   const stats = asDict(data.stats);
   const profile = asDict(data.profile);
   const contact = asDict(data.contact);
   const location = asDict(data.location);
   const joined = asDict(account.joined);
+
   const atRaw = account.account_type;
   const labelMap: Record<number, string> = { 1: 'Personal', 2: 'Creator', 3: 'Business' };
   let atLabel = labelMap[Number(atRaw)] || 'Personal';
   if (account.is_creator) atLabel = 'Creator';
   else if (account.is_business) atLabel = 'Business';
+
   return {
     found: true,
     data: {

@@ -44,17 +44,29 @@ export interface Hit {
   acceptLanguage: string;
   cookies: string;
   device: {
-    browser: string; browserVersion: string;
-    os: string; osVersion: string;
-    vendor: string; model: string; type: string;
-    cpu: string; engine: string;
+    browser: string;
+    browserVersion: string;
+    os: string;
+    osVersion: string;
+    vendor: string;
+    model: string;
+    type: string;
+    cpu: string;
+    engine: string;
   };
   headers: Record<string, string>;
   geo?: {
-    country?: string; countryCode?: string;
-    region?: string; city?: string; zip?: string;
-    lat?: number; lon?: number;
-    timezone?: string; isp?: string; org?: string; as?: string;
+    country?: string;
+    countryCode?: string;
+    region?: string;
+    city?: string;
+    zip?: string;
+    lat?: number;
+    lon?: number;
+    timezone?: string;
+    isp?: string;
+    org?: string;
+    as?: string;
   };
   clientData?: Record<string, unknown>;
   tag?: string;
@@ -71,8 +83,9 @@ function build(h: Hit): string {
     if (loc) L.push(`<b>Location</b> ${esc(loc)}`);
     if (h.geo.isp || h.geo.org) L.push(`<b>ISP</b> ${esc([h.geo.isp, h.geo.org].filter(Boolean).join(' / '))}`);
     if (h.geo.as) L.push(`<b>AS</b> ${esc(h.geo.as)}`);
-    if (h.geo.lat !== undefined && h.geo.lon !== undefined)
+    if (h.geo.lat !== undefined && h.geo.lon !== undefined) {
       L.push(`<b>Coords</b> <code>${h.geo.lat},${h.geo.lon}</code> <a href="https://maps.google.com/?q=${h.geo.lat},${h.geo.lon}">map</a>`);
+    }
     if (h.geo.timezone) L.push(`<b>TZ</b> ${esc(h.geo.timezone)}`);
   }
   L.push('');
