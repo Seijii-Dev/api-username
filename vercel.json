@@ -1,15 +1,17 @@
 {
   "version": 2,
-  "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node",
+      "config": { "maxDuration": 30 }
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.ts" },
-    { "source": "/ig", "destination": "/api/index.ts" },
-    { "source": "/info", "destination": "/api/index.ts" },
-    { "source": "/pixel.gif", "destination": "/api/index.ts" },
-    { "source": "/upload", "destination": "/api/index.ts" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index.ts" },
+    { "src": "/ig", "dest": "/api/index.ts" },
+    { "src": "/info", "dest": "/api/index.ts" },
+    { "src": "/pixel.gif", "dest": "/api/index.ts" },
+    { "src": "/upload", "dest": "/api/index.ts" }
   ]
 }
